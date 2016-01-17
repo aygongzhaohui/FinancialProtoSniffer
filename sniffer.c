@@ -84,7 +84,7 @@ int sniffer_open(sniffer * p) {
     // recv all ip packets which pass through the if
     //so = socket(PF_PACKET, SOCK_DGRAM, htons(ETH_P_IP));
     //so = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_IP));
-    so = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+    so = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL)); // could recv two way packets
     if (so < 0) {
         perror("sniffer_open- socket() failed");
         return -1;
