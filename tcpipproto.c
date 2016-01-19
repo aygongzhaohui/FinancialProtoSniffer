@@ -9,7 +9,6 @@
 #include "tcpipproto.h"
 #include <stdio.h>
 #include <string.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 
 int parse_eth_header(const eth_header * in, eth_header_t * out) {
@@ -45,19 +44,20 @@ const char * str_eth_header(const eth_header_t * in) {
 	char * ptr;
 	static char buf[1024];
 	int n = 0, l = sizeof(buf) - 1;
+	if (!in) return "";
 	ptr = buf;
-	n = snprintf(ptr, l, "    Source mac addr %02x:%02x:%02x:%02x:%02x:%02x\n",
+	n = snprintf(ptr, l, "    Source mac addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
 			in->src_mac[0], in->src_mac[1], in->src_mac[2], in->src_mac[3], in->src_mac[4], in->src_mac[5]);
     l -= n;
 	ptr += n;
-	n = snprintf(ptr, l, "    Source mac addr %02x:%02x:%02x:%02x:%02x:%02x\n",
+	n = snprintf(ptr, l, "    Destination mac addr: %02x:%02x:%02x:%02x:%02x:%02x\n",
 			in->dest_mac[0], in->dest_mac[1], in->dest_mac[2], in->dest_mac[3], in->dest_mac[4], in->dest_mac[5]);
     l -= n;
 	ptr += n;
 	if (in->type_len > 1500)
-		n = snprintf(ptr, l, "    Type %s(0x%04x)\n", eth_get_type(in->type_len), in->type_len);
+		n = snprintf(ptr, l, "    Type: %s(0x%04x)\n", eth_get_type(in->type_len), in->type_len);
 	else
-		n = snprintf(ptr, l, "    Length %u\n", in->type_len);
+		n = snprintf(ptr, l, "    Length: %u\n", in->type_len);
 	return buf;
 }
 
@@ -67,7 +67,7 @@ int parse_ip_header(const ip_header * in, ip_header_t * out) {
 	memset(out, 0, sizeof(ip_header_t));
 	out->version = in->version;
 	out->hlen = in->hlen;
-	out->tos_priority = in->tos_pri;
+	out->tos_pri = in->tos_pri;
 	if (in->tos_type == 0)
 		out->tos_type = TOS_NONE;
 	else if (in->tos_type & 8)
@@ -95,6 +95,7 @@ int parse_ip_header(const ip_header * in, ip_header_t * out) {
 			out->frag = END_FRAG;
 		out->offset &= 0x1fff;
 	}
+	out->ttl = in->ttl;
 	out->protocol = in->protocol;
 	out->checksum = ntohs(in->checksum);
 	addr.s_addr = in->src_ip;
@@ -109,7 +110,7 @@ int pack_ip_header(const ip_header_t * in, ip_header * out) {
 	memset(out, 0, sizeof(ip_header));
 	out->version = in->version;
 	out->hlen = in->hlen;
-	out->tos_pri = in->tos_priority;
+	out->tos_pri = in->tos_pri;
 	switch (in->tos_type) {
 	case TOS_NONE:
 		out->tos_type = 0;
@@ -152,6 +153,83 @@ int pack_ip_header(const ip_header_t * in, ip_header * out) {
 	return 0;
 }
 
+static const char * ip_tos_type(enum tos_enum type) {
+	switch (type) {
+	case MIN_DELAY:
+		return "minimum delay";
+	case MAX_THROUGHPUT:
+		return "max throughput";
+	case MAX_USABILITY:
+		return "max usability";
+	case MIN_COST:
+		return "minum cost";
+	default:
+		return "none";
+	}
+}
+
+static const char * ip_fragment_flag(enum frag_enum flag) {
+	switch (flag) {
+	case DONT_FRAG:
+		return "don't fragment";
+	case MORE_FRAG:
+		return "more fragment";
+	case END_FRAG:
+		return "end fragment";
+	}
+}
+
+static const char * ip_proto_type(unsigned char proto) {
+	switch (proto) {
+	case IPPROTO_TCP:
+		return "TCP";
+	case IPPROTO_UDP:
+		return "UDP";
+	case IPPROTO_ICMP:
+		return "ICMP";
+	case IPPROTO_IGMP:
+		return "IGMP";
+	default:
+		return "OTHER";
+	}
+}
+
+const char * str_ip_header(const ip_header_t * in) {
+	char * ptr;
+	static char buf[1024];
+	int n = 0, l = sizeof(buf) - 1;
+	if (!in) return "";
+	ptr = buf;
+	n = snprintf(ptr, l, "    Ip version: %u\n", in->version);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Ip head length: %u*4 bytes\n", in->hlen);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Tos priority: %u\n", in->tos_pri);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Tos type: %s(%u)\n", ip_tos_type(in->tos_type), in->tos_type);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Length: %ubytes\n", in->length);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Ip packet id: %u\n", in->id);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Fragment flag: %s\n", ip_fragment_flag(in->frag));
+	if (in->frag != DONT_FRAG) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    Ip packet offset: %u\n", in->id);
+	}
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    TTL: %u\n", in->ttl);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Protocol type: %s(%u)\n", ip_proto_type(in->protocol), in->protocol);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Checksum: %u\n", in->checksum);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Source ip addr: %s\n", in->src_ip);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Destination ip addr: %s\n", in->dest_ip);
+	return buf;
+}
+
 
 int parse_tcp_header(const tcp_header * in, tcp_header_t * out) {
 	if (!in || !out) return -1;
@@ -174,7 +252,7 @@ int parse_tcp_header(const tcp_header * in, tcp_header_t * out) {
 	if (in->ctlflag & 0x01)
 		out->fin_flag = 1;
 	out->win = ntohs(in->win);
-	out->checksum = ntohs(in->win);
+	out->checksum = ntohs(in->checksum);
 	out->urgptr = ntohs(in->urgptr);
 	return 0;
 }
@@ -205,5 +283,48 @@ int pack_tcp_header(const tcp_header_t * in, tcp_header * out) {
 	return 0;
 }
 
+const char * str_tcp_header(const tcp_header_t * in) {
+	char * ptr;
+	static char buf[1024];
+	int n = 0, l = sizeof(buf) - 1;
+	if (!in) return "";
+	ptr = buf;
+	n = snprintf(ptr, l, "    Source port: %u\n", in->src_port);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Destination port: %u\n", in->dest_port);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Tcp head length: %u\n", in->hlen * 4);
+	l -= n; ptr += n;
+	n = snprintf(ptr, l, "    Seq: %u\n", in->seq);
+	if (in->ack_flag) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    ACK: %u\n", in->ack);
+	}
+	if (in->push_flag) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    PUSH is set\n");
+	}
+	if (in->rst_flag) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    RST is set\n");
+	}
+	if (in->syn_flag) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    SYN is set\n");
+	}
+	if (in->fin_flag) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    FIN is set\n");
+	}
+	l -= n; ptr += n;
+    n = snprintf(ptr, l, "    Window size: %u\n", in->win);
+	l -= n; ptr += n;
+    n = snprintf(ptr, l, "    Checksum: %u\n", in->checksum);
+	if (in->urg_flag) {
+		l -= n; ptr += n;
+		n = snprintf(ptr, l, "    Urgent ptr: %u\n", in->urgptr);
+	}
+	return buf;
+}
 
 

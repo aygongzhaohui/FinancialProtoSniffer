@@ -2,9 +2,15 @@
 #define _TCPIP_PROTO_H_
 
 #include <stdint.h>
+#include <netinet/in.h>
+#include <asm/byteorder.h>
 
-#define MAC_SIZE  (6)
+#define MAC_SIZE       (6)
 #define STR_IP_SIZE    (15)
+#define ETH_HEAD_LEN   (14)
+#define ETH_T_IP      (0x0800)
+#define ETH_T_ARPREQ   (0x0806)
+#define ETH_T_ARPRSP   (0x0835)
 
 typedef int socket_t;
 
@@ -24,11 +30,21 @@ const char * str_eth_header(const eth_header_t * in);
 
 //////////////////////////////// IP /////////////////////////////
 typedef struct tag_ip_header {
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	unsigned hlen : 4;
+	unsigned version : 4;
+	unsigned tos_nop : 1;
+	unsigned tos_type : 4;
+	unsigned tos_pri : 3;
+#elif defined(__BIG_ENDIAN_BITFIELD)
 	unsigned version : 4;
 	unsigned hlen : 4;
 	unsigned tos_pri : 3;
 	unsigned tos_type : 4;
 	unsigned tos_nop : 1;
+#else
+	#error  "Please fix <asm/byteorder.h>"
+#endif
 	uint16_t length;
 	uint16_t id;
 	uint16_t offset;
@@ -46,7 +62,7 @@ enum frag_enum { DONT_FRAG, MORE_FRAG, END_FRAG };
 typedef struct tag_ip_header_t {
 	unsigned char version;
 	unsigned char hlen;
-	unsigned char tos_priority;
+	unsigned char tos_pri;
 	enum tos_enum tos_type;
 	unsigned short length;
 	unsigned short id;
@@ -70,10 +86,19 @@ typedef struct tag_tcp_header {
 	uint16_t dest_port;
 	uint32_t seq;
 	uint32_t ack;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	unsigned : 4;
+	unsigned hlen : 4;
+    unsigned ctlflag : 6;
+	unsigned : 2;
+#elif defined(__BIG_ENDIAN_BITFIELD)
 	unsigned hlen : 4;
 	unsigned : 4;
 	unsigned : 2;
     unsigned ctlflag : 6;
+#else
+	#error  "Please fix <asm/byteorder.h>"
+#endif
 	uint16_t win;
 	uint16_t checksum;
 	uint16_t urgptr;
@@ -99,6 +124,18 @@ typedef struct tag_tcp_header_t {
 int parse_tcp_header(const tcp_header * in, tcp_header_t * out);
 int pack_tcp_header(const tcp_header_t * in, tcp_header * out);
 const char * str_tcp_header(const tcp_header_t * in);
+
+
+typedef struct tag_bits {
+	unsigned bit0 : 1;
+	unsigned bit1 : 1;
+	unsigned bit2 : 1;
+	unsigned bit3 : 1;
+	unsigned bit4 : 1;
+	unsigned bit5 : 1;
+	unsigned bit6 : 1;
+	unsigned bit7 : 1;
+} bits;
 
 
 #endif
